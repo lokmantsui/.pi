@@ -146,8 +146,15 @@ function connectVscode(handlers: {
   onContext: (data: Ctx) => void;
   onInject: (text: string) => void;
 }): LiveLink | null {
-  const port = Number(process.env[PORT_ENV]) || discoverPort();
-  if (!port) return null;
+  const envPort = Number(process.env[PORT_ENV]) || 0;
+  // Inside VSCode but the bridge isn't up yet (e.g. terminal restored on window
+  // reload before the extension activated): keep polling for a port file.
+  const inVscode = !!envPort || process.env.TERM_PROGRAM === "vscode";
+  if (!envPort && !discoverPort() && !inVscode) return null;
+  let attempt = 0;
+  // Re-resolve every dial so we follow the bridge to a new port after a reload;
+  // alternate env port and discovery so a stale env port doesn't pin us.
+  const resolvePort = () => (envPort && attempt++ % 2 === 0 ? envPort : discoverPort() || envPort);
 
   const link: LiveLink = { latest: null, send: () => false, connected: () => false };
   let socket: net.Socket | undefined;
@@ -156,7 +163,10 @@ function connectVscode(handlers: {
 
   const dial = () => {
     if (stopped) return;
+    const port = resolvePort();
+    if (!port) return void setTimeout(dial, 1000);
     socket = net.connect(port, "127.0.0.1");
+    socket.on("connect", () => (attempt = 0));
     socket.setEncoding("utf8");
     link.send = (msg) => {
       if (socket && socket.writable) return socket.write(JSON.stringify(msg) + "\n");
