@@ -5,31 +5,33 @@
 //           since the trace was recorded, so that hop must be re-traced.
 //   moved - if `via` is no longer on `line` but occurs elsewhere (nearest match wins) and the hash matches
 //           at the shifted range, the code only shifted. --fix rewrites line/range (no LLM needed) and then checks the hash at the new range.
-// Usage: node verify-trace.mjs <trace.json> [--stamp] [--fix]
+// Usage: node verify-trace.ts <trace.json> [--stamp] [--fix]
 //   --stamp  (re)compute every hop's sha; use right after writing a new trace
 // Exit 0 = VERIFIED, 1 = DRIFTED (run --fix), 2 = STALE or BAD (re-trace listed hops).
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { readLines, sha } from "./lib.mjs";
+import { readLines, readTrace, sha } from "./lib.ts";
 
 const args = process.argv.slice(2);
 const tracePath = args.find((a) => !a.startsWith("--"));
 const doStamp = args.includes("--stamp");
 const doFix = args.includes("--fix");
 if (!tracePath) {
-	console.error("usage: verify-trace.mjs <trace.json> [--stamp] [--fix]");
+	console.error("usage: verify-trace.ts <trace.json> [--stamp] [--fix]");
 	process.exit(2);
 }
 
-const trace = JSON.parse(readFileSync(tracePath, "utf8"));
-const rangeText = (lines, [a, b]) => lines.slice(a - 1, b).join("\n");
-const counts = { ok: 0, moved: 0, stale: 0, bad: 0 };
+type Status = "ok" | "moved" | "stale" | "bad";
+
+const trace = readTrace(tracePath);
+const rangeText = (lines: string[], [a, b]: [number, number]): string => lines.slice(a - 1, b).join("\n");
+const counts: Record<Status, number> = { ok: 0, moved: 0, stale: 0, bad: 0 };
 let changed = false;
 
 for (const hop of trace.hops) {
 	const label = `step ${hop.step} ${hop.file}:${hop.line}`;
 	const abs = join(trace.root, hop.file);
-	const report = (status, msg) => {
+	const report = (status: Status, msg: string): void => {
 		counts[status]++;
 		console.log(`${status.toUpperCase().padEnd(6)} ${label}  ${msg}`);
 	};
@@ -46,8 +48,9 @@ for (const hop of trace.hops) {
 	let delta = 0;
 	if (!(lines[hop.line - 1] ?? "").includes(hop.via)) {
 		// Nearest occurrence wins; a wrong pick still fails the sha check below, so this cannot fake a pass.
-		const hits = lines.flatMap((l, i) => (l.includes(hop.via) ? [i + 1] : []));
-		const dist = (n) => Math.abs(n - hop.line);
+		const via = hop.via;
+		const hits = lines.flatMap((l, i) => (l.includes(via) ? [i + 1] : []));
+		const dist = (n: number): number => Math.abs(n - hop.line);
 		hits.sort((a, b) => dist(a) - dist(b));
 		if (hits.length === 0 || (hits.length > 1 && dist(hits[0]) === dist(hits[1]))) {
 			report("bad", `via not found unambiguously (${hits.length} matches): ${JSON.stringify(hop.via)}`);
@@ -55,7 +58,7 @@ for (const hop of trace.hops) {
 		}
 		delta = hits[0] - hop.line;
 	}
-	const range = [hop.range[0] + delta, hop.range[1] + delta];
+	const range: [number, number] = [hop.range[0] + delta, hop.range[1] + delta];
 	const current = sha(rangeText(lines, range));
 
 	if (doStamp) {

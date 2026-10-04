@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 // Resolve a location (vscode.dev / github URL, vscode:// link, path:line) against a gps map.
 // Prints: the source lines, the nearest map nodes in that file, and saved traces touching it.
-// Usage: node resolve-loc.mjs <loc> [--map pkg/architecture.gps/map.d2]
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+// Usage: node resolve-loc.ts <loc> [--map pkg/architecture.gps/map.d2]
+import { existsSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
-import { gitRoot, listMaps, mapNodes, parseLoc, readLines, tracesDir } from "./lib.mjs";
+import { gitRoot, listMaps, type MapNode, mapNodes, parseLoc, readLines, readTrace, tracesDir } from "./lib.ts";
 
 const args = process.argv.slice(2);
 const mapIdx = args.indexOf("--map");
 const mapArg = mapIdx >= 0 ? args.splice(mapIdx, 2)[1] : undefined;
 const loc = args[0];
 if (!loc) {
-	console.error("usage: resolve-loc.mjs <loc> [--map pkg/architecture.gps/map.d2]");
+	console.error("usage: resolve-loc.ts <loc> [--map pkg/architecture.gps/map.d2]");
 	process.exit(2);
 }
 
@@ -41,7 +41,7 @@ if (!mapArg) console.log(`\nmaps in repo: ${maps.map((m) => relative(process.cwd
 for (const map of maps) {
 	console.log(`\n== map ${relative(process.cwd(), map)}`);
 	const inFile = mapNodes(map)
-		.filter((n) => n.file === file)
+		.filter((n): n is Required<MapNode> => n.file === file && n.line !== undefined)
 		.sort((a, b) => a.line - b.line);
 	const before = inFile.filter((n) => n.line <= start);
 	const nearest = before.at(-1);
@@ -56,9 +56,9 @@ for (const map of maps) {
 
 	const dir = tracesDir(map);
 	if (!existsSync(dir)) continue;
-	const hits = [];
+	const hits: string[] = [];
 	for (const name of readdirSync(dir).filter((f) => f.endsWith(".json"))) {
-		const trace = JSON.parse(readFileSync(join(dir, name), "utf8"));
+		const trace = readTrace(join(dir, name));
 		for (const hop of trace.hops) {
 			if (hop.file === rel && hop.range && start <= hop.range[1] && end >= hop.range[0]) {
 				hits.push(`  ${name}  step ${hop.step}/${trace.hops.length}  ${trace.query.from} -> ${trace.query.to}  (${trace.query.intent})`);

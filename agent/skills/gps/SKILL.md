@@ -10,7 +10,7 @@ Two modes:
 - **Map** (no `from:`/`to:` args): one `.d2` file (`pkg/architecture.gps/map.d2`, rendered to `map.svg` next to it) that explains how the code works, compiles cleanly, renders readably, and has a clickable `link` on every node pointing to the exact definition line. Steps 1-6.
 - **Path** (`from:<loc>` and/or `to:<loc>`): trace how data/control gets from A to B, verify it mechanically, save it next to the map, and draw it as a red path over the map. See "Path mode" below.
 
-Scripts are relative to this skill directory.
+Scripts are relative to this skill directory. They are TypeScript run directly by Node >= 23.6 (`node scripts/x.ts`, no build, no dependencies). After editing a script, type-check with `npm install && npm run typecheck` in this directory.
 
 ## 1. Clarify scope
 
@@ -90,7 +90,7 @@ user -> core.run: "1. call" {class: flow}
 ```bash
 D2=$(./scripts/ensure-d2.sh)            # prints path to a d2 binary (system or /tmp download)
 $D2 --layout elk pkg/architecture.gps/map.d2 pkg/architecture.gps/map.svg
-node ./scripts/check-links.mjs pkg/architecture.gps/map.svg   # verifies every vscode:// link: file exists, line in range
+node ./scripts/check-links.ts pkg/architecture.gps/map.svg   # verifies every vscode:// link: file exists, line in range
 $D2 --layout elk pkg/architecture.gps/map.d2 /tmp/map.png     # preview only; do not save the PNG
 ```
 
@@ -136,29 +136,29 @@ pkg/architecture.gps/<slug>.svg     rendered, clickable
 Resolve each with:
 
 ```bash
-node ./scripts/resolve-loc.mjs '<loc>' [--map pkg/architecture.gps/map.d2]
+node ./scripts/resolve-loc.ts '<loc>' [--map pkg/architecture.gps/map.d2]
 ```
 
 It prints the source lines, the map nodes in that file (nearest definition marked `*`), and every saved trace that already passes through that location.
 
 ## Flow
 
-1. **Find the map.** Use the one from earlier in this conversation, else the map `resolve-loc.mjs` lists. If there is none, offer to build one first (map mode); a path needs a map.
-2. **`from:` only.** Resolve A. Read `index.md` and list saved paths that start at or pass through A (from `resolve-loc.mjs`) as ready-made destinations. Then ask the user for the destination B. Keep A in the conversation; the next invocation may be `to:` only.
+1. **Find the map.** Use the one from earlier in this conversation, else the map `resolve-loc.ts` lists. If there is none, offer to build one first (map mode); a path needs a map.
+2. **`from:` only.** Resolve A. Read `index.md` and list saved paths that start at or pass through A (from `resolve-loc.ts`) as ready-made destinations. Then ask the user for the destination B. Keep A in the conversation; the next invocation may be `to:` only.
 3. **`to:` given** (with A from args or earlier in the conversation; if A is unknown, ask for it). Resolve B. Also ask for or infer a one-line intent (which value or event the user cares about).
-4. **Reuse first.** If `index.md` has a trace with the same A and B (same symbols; lines may differ a little), run `verify-trace.mjs` on it:
+4. **Reuse first.** If `index.md` has a trace with the same A and B (same symbols; lines may differ a little), run `verify-trace.ts` on it:
    - `VERIFIED`: reuse it. Go to step 7.
-   - `DRIFTED`: lines shifted but bodies unchanged. Run `verify-trace.mjs <json> --fix`, then step 7. No re-tracing.
+   - `DRIFTED`: lines shifted but bodies unchanged. Run `verify-trace.ts <json> --fix`, then step 7. No re-tracing.
    - `STALE`: re-trace only the hops reported STALE/BAD, keeping the rest.
 5. **Trace.** Start at A, find where the value goes next (call argument, return, assignment, emit/callback, subscription), follow it into the next function, repeat until B. Prefer the shortest real path. Read the code; never guess a hop. When a hop goes through dynamic dispatch, a callback registry, or a subscription, find the registration site, name it in the edge label, and add a `gaps` entry for alternatives you did not take (e.g. the parallel branch).
 6. **Write `pkg/architecture.gps/<slug>.json`** (schema below), then stamp and verify:
    ```bash
-   node ./scripts/verify-trace.mjs pkg/architecture.gps/<slug>.json --stamp
+   node ./scripts/verify-trace.ts pkg/architecture.gps/<slug>.json --stamp
    ```
    Fix any BAD hop (wrong line or `via` not copied verbatim) and rerun until `VERIFIED`.
 7. **Render.**
    ```bash
-   node ./scripts/render-path.mjs pkg/architecture.gps/<slug>.json
+   node ./scripts/render-path.ts pkg/architecture.gps/<slug>.json
    ```
    This checks node keys exist in the map, writes `<slug>.d2` + `<slug>.svg`, checks links, rewrites `index.md`, and adds a one-line pointer to `index.md` in the map header (once). Then render a PNG of `<slug>.d2` and `read` it to check the path is readable. If hops pile into one cramped container, merge minor hops (keep them in the JSON, but give them the same `node`; consecutive hops with the same key draw one node).
 8. **Report** the answer (the `summary`), the numbered hops with `file:line`, the gaps, and the SVG path.
@@ -199,12 +199,12 @@ Rules:
 
 - `line`: the line holding `via`. `via`: an exact substring of that line, copied verbatim (the verifier checks it; this is what stops invented hops). For the last hop, `via` is the text at B.
 - `range`: first and last line of the enclosing function/method. The verifier hashes it (`sha`, added by `--stamp`) to detect code changes.
-- `node`: an existing map node key (from `resolve-loc.mjs` output) when the hop is that node's code. Otherwise omit `node`, set `container` to the map container it belongs in (or omit for top level), and give a short `label` (`"name\nwhat it does"`). New nodes link to `file:line` automatically.
+- `node`: an existing map node key (from `resolve-loc.ts` output) when the hop is that node's code. Otherwise omit `node`, set `container` to the map container it belongs in (or omit for top level), and give a short `label` (`"name\nwhat it does"`). New nodes link to `file:line` automatically.
 - `edge`: short label for the edge to the next hop. Omit on the last hop.
 - Slug: short kebab-case from the intent, e.g. `tool-execution-end-to-extensions`. Never `map` (reserved for the map file).
-- The JSON is the source of truth. Never hand-edit `<slug>.d2`; edit the JSON and rerun `render-path.mjs`.
+- The JSON is the source of truth. Never hand-edit `<slug>.d2`; edit the JSON and rerun `render-path.ts`.
 
 ## Exit codes
 
-- `verify-trace.mjs`: 0 VERIFIED, 1 DRIFTED, 2 STALE/BAD.
-- `render-path.mjs`: 1 on unknown node/container keys or bad links.
+- `verify-trace.ts`: 0 VERIFIED, 1 DRIFTED, 2 STALE/BAD.
+- `render-path.ts`: 1 on unknown node/container keys or bad links.
