@@ -38,6 +38,7 @@ Structure:
 - Startup/wiring edges in default style.
 - One numbered request flow (`1. ...`, `2. ...`) highlighted with a `flow` class; hooks/registrations dashed with a `hook` class.
 - Header comment explaining the render command, edge conventions, and that nodes link to source.
+- Never use `style.animated: true` (or any D2 animation). Animated edges make SVG viewers repaint the whole diagram continuously and keep CPU busy. For emphasis use color, `stroke-width`, `bold`, or `stroke-dash`.
 
 Template:
 
