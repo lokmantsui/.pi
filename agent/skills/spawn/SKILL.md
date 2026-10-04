@@ -26,12 +26,15 @@ Per-agent files are in `$SPAWN_DIR/<name>/` (default `/tmp/pi-subagents/<name>/`
 | `scripts/wait.sh [-t 90] <name...>` | Wait for several agents **in parallel**, printing each final answer (or `ERROR(...)`) as soon as it settles. On timeout it prints the stragglers' status and exits 2. The agents keep running. |
 | `scripts/status.sh [name...]` | Non-blocking snapshot: idle/BUSY, seconds since the last event, and the current tool call. |
 | `scripts/abort.sh <name...>` | Abort an agent's current run. It stays alive and keeps its context. |
+| `scripts/router.py` | Board-to-RPC router. `spawn.sh` starts it automatically in the `router` window. It pushes board posts into recipients' conversations. |
 | `scripts/view.py` | Transcript renderer. Can also be used offline: `python3 scripts/view.py < out.jsonl`. |
 
 ## Workflow
 
 ```bash
 S=<skill dir>/scripts
+# 0. Make sure the message board exists (see "Message board" below)
+[ -f ~/.pi/agent/subagents/README.md ] || { mkdir -p ~/.pi/agent/subagents && cp <skill dir>/board-template/{README.md,board.py} ~/.pi/agent/subagents/ && chmod +x ~/.pi/agent/subagents/board.py; }
 $S/spawn.sh a1; $S/spawn.sh a2
 sleep 2                                  # let pi boot (commands sent earlier are still queued and work)
 $S/send.sh a1 "Compute 1+1. Reply with only the number."
@@ -50,12 +53,27 @@ Then report each subagent's answer to the user.
 
 - Keep each `wait.sh` short (≤90s, or ≤120s for heavy tasks). On exit 2, run `status.sh`. If an agent is busy doing useful work, wait again. If it's looping or blocked (for example a long `board wait` or `sleep`), run `abort.sh` and re-prompt it with clearer limits.
 - Never wait on agents one at a time. Pass all names to one `wait.sh` call.
-- In prompts that involve coordinating with other agents, say "don't wait more than 60s total; if the other side hasn't replied, end your turn and say so". Then wake the agents up again with `send.sh`.
+- With the router running, agents shouldn't wait on the board at all. If you see one blocking in `board.py wait`/`read` loops, abort it and remind it that replies are pushed.
+- A multi-agent conversation settles and resumes several times as messages bounce back and forth. One `wait.sh` returning doesn't mean the conversation is over. Check `status.sh` (all idle) and `board.py log`.
 - Report progress to the user between waits rather than going silent.
 
 ## Message board
 
-If `~/.pi/agent/subagents/README.md` exists, `spawn.sh` appends it to the agent's system prompt and sets `SUBAGENT_NAME`. Agents can then talk directly using `~/.pi/agent/subagents/board` (`post`, `read`, `wait`, `log`). Read the board yourself with `board log`.
+**Before spawning, the host must make sure the board exists.** If `~/.pi/agent/subagents/` is missing, create it from this skill's `board-template/` (the `README.md` template and the `board.py` script), as in step 0 of the workflow. Never overwrite an existing board: the user may have edited the README, and `board.jsonl`/`cursors/` hold live messages.
+
+If `~/.pi/agent/subagents/README.md` exists, `spawn.sh` appends it to the agent's system prompt and sets `SUBAGENT_NAME`. Agents talk with `~/.pi/agent/subagents/board.py post <name|all> "msg"`. Set `SUBAGENT_BOARD` to use a different board folder.
+
+**Delivery is push-based.** `spawn.sh` also starts `scripts/router.py` in a `router` tmux window. The router watches `board.jsonl` and writes each new message into the recipient's `cmd.jsonl` as a `prompt` with `streamingBehavior`:
+- **Idle agents** start a turn right away.
+- **Busy agents** get it queued: `followUp` by default, or `steer` (delivered before their next LLM call) for messages posted with `post --urgent`.
+- **Batching:** messages that arrive together are batched per recipient.
+- **Recipients:** live agent windows only. Messages to `host` or other names stay on the board.
+
+So agents never wait or poll. They post and end their turn, and replies wake them up.
+
+- **Reply-loop guard:** each message carries a hop count, and messages beyond `ROUTER_MAX_HOPS` (default 30) aren't delivered. The router posts a note to `host` instead. `send.sh` resets an agent's hop count.
+- **Host side:** kick things off with `send.sh`. Then use `wait.sh`/`status.sh` as usual: an agent counts as settled when it's idle with nothing queued. Read the conversation with `board.py log`, and check messages addressed to `host` the same way. The `router` window logs every delivery.
+- `send.sh` also queues as a follow-up, so it's safe to send while an agent is busy.
 
 ## Notes
 
