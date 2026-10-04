@@ -1,5 +1,5 @@
 ---
-name: map
+name: gps
 description: Explore a codebase or package and produce a D2 architecture diagram where every node links to its definition (vscode://file/<abs-path>:<line>). Use when asked to diagram, visualize, or explain how a package/module/system works with d2.
 ---
 
@@ -86,7 +86,6 @@ user -> core.run: "1. call" {class: flow}
 ```bash
 D2=$(./scripts/ensure-d2.sh)            # prints path to a d2 binary (system or /tmp download)
 $D2 --layout elk file.d2 /tmp/diagram.svg
-$D2 --layout elk file.d2 /tmp/diagram.png
 node ./scripts/check-links.mjs /tmp/diagram.svg   # verifies every vscode:// link: file exists, line in range
 ```
 
