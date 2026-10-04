@@ -14,7 +14,7 @@ Scripts are relative to this skill directory. They are TypeScript run directly b
 
 ## 1. Clarify scope
 
-If the target is ambiguous (monorepo root, several packages), ask which package/module to diagram before exploring. Ask where to write the file if unclear; default `<package>/architecture.gps/map.d2`. The `<name>.gps/` dir holds the map (`map.d2` + `map.svg`, name fixed so scripts find it) and all saved paths; `map` is reserved and never used as a trace slug. When you create `map.d2` for the first time, also create `<name>.gps/.gitignore` containing `*`.
+If the target is ambiguous (monorepo root, several packages), ask which package/module to diagram before exploring. Ask where to write the file if unclear; default `<package>/architecture.gps/map.d2`. The `<name>.gps/` dir holds the map (`map.d2` + `map.svg`, name fixed so scripts find it) and all saved paths; `map` is reserved and never used as a trace slug.
 
 ## 2. Explore
 
@@ -116,7 +116,6 @@ A path is a list of hops from A to B. Each hop is one code location plus the exa
 Files, for map `pkg/architecture.gps/map.d2`:
 
 ```
-pkg/architecture.gps/.gitignore     `*` (keeps the gps dir out of git)
 pkg/architecture.gps/map.d2         the map (map mode output)
 pkg/architecture.gps/map.svg        the map, rendered, clickable
 pkg/architecture.gps/index.md       one table of all saved paths (read this first; cheap)
