@@ -166,11 +166,11 @@ export function tracesDir(mapPath: string): string {
 	return dirname(mapPath);
 }
 
-/** All gps maps (*.gps/map.d2 outside node_modules) in the repo containing dir. */
+/** All gps maps (*.gps/map.d2 outside node_modules) in the repo containing dir. Includes git-ignored maps (gps dirs ignore themselves). */
 export function listMaps(dir: string): string[] {
 	const root = gitRoot(dir);
 	if (!root) return [];
-	const out = execFileSync("git", ["-C", root, "ls-files", "--cached", "--others", "--exclude-standard", "*.d2"], {
+	const out = execFileSync("git", ["-C", root, "ls-files", "--cached", "--others", `*.gps/${MAP_NAME}.d2`], {
 		encoding: "utf8",
 	});
 	return out

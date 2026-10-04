@@ -14,7 +14,7 @@ Scripts are relative to this skill directory. They are TypeScript run directly b
 
 ## 1. Clarify scope
 
-If the target is ambiguous (monorepo root, several packages), ask which package/module to diagram before exploring. Ask where to write the file if unclear; default `<package>/architecture.gps/map.d2`. The `<name>.gps/` dir holds the map (`map.d2` + `map.svg`, name fixed so scripts find it) and all saved paths; `map` is reserved and never used as a trace slug.
+If the target is ambiguous (monorepo root, several packages), ask which package/module to diagram before exploring. Ask where to write the file if unclear; default `<package>/architecture.gps/map.d2`. The `<name>.gps/` dir holds the map (`map.d2` + `map.svg`, name fixed so scripts find it) and all saved paths; `map` is reserved and never used as a trace slug. When you create `map.d2` for the first time, also create `<name>.gps/.gitignore` containing `*`.
 
 ## 2. Explore
 
@@ -85,16 +85,15 @@ user -> core.run: "1. call" {class: flow}
 - Use `tooltip` only if the user asks for hover text.
 - If the user wants portable links instead, use GitHub URLs pinned to a commit: `https://github.com/<org>/<repo>/blob/<sha>/<path>#L<line>`.
 
-## 5. Compile, check, look
+## 5. Compile and check
 
 ```bash
-D2=$(./scripts/ensure-d2.sh)            # prints path to a d2 binary (system or /tmp download)
-$D2 --layout elk pkg/architecture.gps/map.d2 pkg/architecture.gps/map.svg
-node ./scripts/check-links.ts pkg/architecture.gps/map.svg   # verifies every vscode:// link: file exists, line in range
-$D2 --layout elk pkg/architecture.gps/map.d2 /tmp/map.png     # preview only; do not save the PNG
+node ./scripts/render-map.ts pkg/architecture.gps/map.d2
 ```
 
-Then `read` the PNG and check readability. If edges cross the whole diagram, aggregate them (connect container -> container instead of node -> node), drop low-value edges, or move nodes between containers. Iterate until it is readable.
+This one command does everything: gets d2 (system or /tmp download), writes `map.svg`, checks every vscode:// link (file exists, line in range). Fix any `BAD` link and re-run.
+
+Keep it readable by construction: aggregate edges that would cross the whole diagram (connect container -> container instead of node -> node), drop low-value edges, and keep related nodes in the same container.
 
 ## D2 gotchas (all hit in practice)
 
@@ -108,7 +107,7 @@ Then `read` the PNG and check readability. If edges cross the whole diagram, agg
 
 ## 6. Report
 
-Tell the user the map path (`pkg/architecture.gps/map.d2`), the render command, the SVG path (`map.svg`) and PNG preview path, a short walkthrough of the numbered flow, and that line numbers drift as code changes (re-run step 4 to refresh).
+Tell the user the map path (`pkg/architecture.gps/map.d2`), the render command, the SVG path (`map.svg`), a short walkthrough of the numbered flow, and that line numbers drift as code changes (re-run step 4 to refresh).
 
 # Path mode
 
@@ -117,6 +116,7 @@ A path is a list of hops from A to B. Each hop is one code location plus the exa
 Files, for map `pkg/architecture.gps/map.d2`:
 
 ```
+pkg/architecture.gps/.gitignore     `*` (keeps the gps dir out of git)
 pkg/architecture.gps/map.d2         the map (map mode output)
 pkg/architecture.gps/map.svg        the map, rendered, clickable
 pkg/architecture.gps/index.md       one table of all saved paths (read this first; cheap)
@@ -160,7 +160,7 @@ It prints the source lines, the map nodes in that file (nearest definition marke
    ```bash
    node ./scripts/render-path.ts pkg/architecture.gps/<slug>.json
    ```
-   This checks node keys exist in the map, writes `<slug>.d2` + `<slug>.svg`, checks links, rewrites `index.md`, and adds a one-line pointer to `index.md` in the map header (once). Then render a PNG of `<slug>.d2` and `read` it to check the path is readable. If hops pile into one cramped container, merge minor hops (keep them in the JSON, but give them the same `node`; consecutive hops with the same key draw one node).
+   This checks node keys exist in the map, writes `<slug>.d2` + `<slug>.svg`, checks links, rewrites `index.md`, and adds a one-line pointer to `index.md` in the map header (once). To keep the path readable, merge minor hops that would pile into one container (keep them in the JSON, but give them the same `node`; consecutive hops with the same key draw one node).
 8. **Report** the answer (the `summary`), the numbered hops with `file:line`, the gaps, and the SVG path.
 
 ## Trace JSON schema
