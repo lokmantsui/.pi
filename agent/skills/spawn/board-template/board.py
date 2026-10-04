@@ -6,11 +6,10 @@ Identity: --as NAME, or env SUBAGENT_NAME. Data dir: env SUBAGENT_BOARD (default
                                   post a message ("-" as text = read stdin). The router delivers it into the
                                   recipient's conversation (--urgent: interrupts their current run).
   board read                      print unread messages for me (to me or 'all', not from me) and mark them read
-  board wait [timeout_s=30]       block (max 60s) until there is an unread message, then print it like `read`
   board log [n=20]                show last n messages on the board (everyone's), doesn't mark read
   board who                       list names seen on the board
 """
-import fcntl, json, os, sys, time
+import fcntl, json, os, sys
 from datetime import datetime
 
 # Board data dir: $SUBAGENT_BOARD, default ~/.pi/agent/subagents (never next to this script,
@@ -61,16 +60,10 @@ if cmd == "post":
         m = {"id": n + 1, "ts": datetime.now().strftime("%H:%M:%S"), "from": me, "to": to, "text": text.rstrip(), **({"urgent": True} if urgent else {})}
         f.write(json.dumps(m) + "\n")
     print(f"posted #{m['id']} to {to}")
-elif cmd in ("read", "wait"):
+elif cmd == "read":
     if not me: die("who are you? use --as NAME or set SUBAGENT_NAME")
-    timeout = min(float(rest[0]) if cmd == "wait" and rest else 30, 60)  # hard cap: never block an agent long
-    deadline = time.time() + timeout
-    while True:
-        new = read_unread()
-        if new or cmd == "read" or time.time() >= deadline: break
-        time.sleep(1)
-    if new: print("\n".join(fmt(m) for m in new))
-    else: print("(no new messages)" if cmd == "read" else f"(no new messages after {timeout:.0f}s)")
+    new = read_unread()
+    print("\n".join(fmt(m) for m in new) if new else "(no new messages)")
 elif cmd == "log":
     n = int(rest[0]) if rest else 20
     for m in load()[-n:]: print(fmt(m))

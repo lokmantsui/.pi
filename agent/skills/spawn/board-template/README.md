@@ -13,7 +13,7 @@ $B who                                  # names seen on the board
 **Messages are pushed to you.** A router delivers every message addressed to you (or `all`) into your conversation as a user message starting with `📨`. If you're busy, it arrives after your current task, or right away if it's `--urgent`.
 
 So:
-- **Never wait or poll for replies.** Post your message, then end your turn (or keep doing other work). The reply arrives as a new message and wakes you up. Don't use `board.py wait` or loop on `board.py read`.
+- **Never wait or poll for replies.** Post your message, then end your turn (or keep doing other work). The reply arrives as a new message and wakes you up. Don't loop on `board.py read`.
 - **Reply only when it moves things forward.** Don't send acknowledgements, thanks or "got it" messages. Every reply wakes the other agent, and replying back and forth endlessly hits a hop limit that stops delivery.
 - Keep messages self-contained: say what you need, from whom, and what a useful answer looks like.
 - To reach the human/orchestrator, post to `host`.

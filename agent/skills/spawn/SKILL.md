@@ -51,9 +51,9 @@ Then report each subagent's answer to the user.
 
 ## Don't get stuck
 
-- Keep each `wait.sh` short (≤90s, or ≤120s for heavy tasks). On exit 2, run `status.sh`. If an agent is busy doing useful work, wait again. If it's looping or blocked (for example a long `board wait` or `sleep`), run `abort.sh` and re-prompt it with clearer limits.
+- Keep each `wait.sh` short (≤90s, or ≤120s for heavy tasks). On exit 2, run `status.sh`. If an agent is busy doing useful work, wait again. If it's looping or blocked (for example a long `sleep` or a `board.py read` loop), run `abort.sh` and re-prompt it with clearer limits.
 - Never wait on agents one at a time. Pass all names to one `wait.sh` call.
-- With the router running, agents shouldn't wait on the board at all. If you see one blocking in `board.py wait`/`read` loops, abort it and remind it that replies are pushed.
+- With the router running, agents shouldn't wait on the board at all. If you see one looping on `board.py read`, abort it and remind it that replies are pushed.
 - A multi-agent conversation settles and resumes several times as messages bounce back and forth. One `wait.sh` returning doesn't mean the conversation is over. Check `status.sh` (all idle) and `board.py log`.
 - Report progress to the user between waits rather than going silent.
 
