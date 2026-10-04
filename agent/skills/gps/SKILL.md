@@ -8,7 +8,7 @@ description: Explore a codebase or package and produce a D2 architecture diagram
 Two modes:
 
 - **Map** (no `from:`/`to:` args): one `.d2` file (`pkg/architecture.gps/map.d2`, rendered to `map.svg` next to it) that explains how the code works, compiles cleanly, renders readably, and has a clickable `link` on every node pointing to the exact definition line. Steps 1-6.
-- **Path** (`from:<loc>` and/or `to:<loc>`): trace how data/control gets from A to B, verify it mechanically, save it next to the map, and draw it as a green path over the map. See "Path mode" below.
+- **Path** (`from:<loc>` and/or `to:<loc>`): trace how data/control gets from A to B, verify it mechanically, save it next to the map, and draw it as a red path over the map. See "Path mode" below.
 
 Scripts are relative to this skill directory.
 
@@ -120,7 +120,7 @@ pkg/architecture.gps/map.d2         the map (map mode output)
 pkg/architecture.gps/map.svg        the map, rendered, clickable
 pkg/architecture.gps/index.md       one table of all saved paths (read this first; cheap)
 pkg/architecture.gps/<slug>.json    trace record (source of truth)
-pkg/architecture.gps/<slug>.d2      generated overlay: ...@map + green path
+pkg/architecture.gps/<slug>.d2      generated overlay: ...@map + red path
 pkg/architecture.gps/<slug>.svg     rendered, clickable
 ```
 
