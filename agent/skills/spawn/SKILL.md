@@ -33,8 +33,6 @@ Per-agent files are in `$SPAWN_DIR/<name>/` (default `/tmp/pi-subagents/<name>/`
 
 ```bash
 S=<skill dir>/scripts
-# 0. Make sure the message board exists (see "Message board" below)
-[ -f ~/.pi/agent/subagents/README.md ] || { mkdir -p ~/.pi/agent/subagents && cp <skill dir>/board-template/{README.md,board.py} ~/.pi/agent/subagents/ && chmod +x ~/.pi/agent/subagents/board.py; }
 $S/spawn.sh a1; $S/spawn.sh a2
 sleep 2                                  # let pi boot (commands sent earlier are still queued and work)
 $S/send.sh a1 "Compute 1+1. Reply with only the number."
@@ -59,7 +57,7 @@ Then report each subagent's answer to the user.
 
 ## Message board
 
-**Before spawning, the host must make sure the board exists.** If `~/.pi/agent/subagents/` is missing, create it from this skill's `board-template/` (the `README.md` template and the `board.py` script), as in step 0 of the workflow. Never overwrite an existing board: the user may have edited the README, and `board.jsonl`/`cursors/` hold live messages.
+**`spawn.sh` installs the board automatically.** If `README.md` or `board.py` is missing from the board folder, it copies it from this skill's `board-template/`, with the README's paths pointed at the actual board folder. It prints an `installed ...` line when it does. It never overwrites existing files: the user may have edited the README, and `board.jsonl`/`cursors/` hold live messages. Don't restore an old board from the trash; let `spawn.sh` reinstall it.
 
 If `~/.pi/agent/subagents/README.md` exists, `spawn.sh` appends it to the agent's system prompt and sets `SUBAGENT_NAME`. Agents talk with `~/.pi/agent/subagents/board.py post <name|all> "msg"`. Set `SUBAGENT_BOARD` to use a different board folder.
 
