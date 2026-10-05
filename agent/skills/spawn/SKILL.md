@@ -23,7 +23,7 @@ Per-agent files are in `$SPAWN_DIR/<name>/` (default `/tmp/pi-subagents/<name>/`
 |---|---|
 | `scripts/spawn.sh <name> [pi args...]` | Start (or restart) a subagent window. Extra args go to pi, e.g. `--model x`, `--tools read,bash`. `SPAWN_CWD` sets its working dir (default: current dir). |
 | `scripts/send.sh <name> <message>` | Send a prompt. `send.sh <name> --raw '<json>'` sends any RPC command (e.g. `{"type":"abort"}`, `{"type":"get_state","id":"s1"}`). |
-| `scripts/wait.sh [-t 90] <name...>` | Wait for several agents **in parallel**, printing each final answer (or `ERROR(...)`) as soon as it settles. On timeout it prints the stragglers' status and exits 2. The agents keep running. |
+| `scripts/next.sh [-t 90] [name...]` | Host event loop. Blocks until the **next** event (an agent settled, printing its final answer or `ERROR(...)`, or a board message to `host`/`all`), prints every event pending at that moment, and exits 0. Each event is shown once. Adds `--- all idle` when no watched agent is busy. Defaults to every spawned agent. On timeout it prints status and exits 2. The agents keep running. |
 | `scripts/status.sh [name...]` | Non-blocking snapshot: idle/BUSY, seconds since the last event, and the current tool call. |
 | `scripts/abort.sh <name...>` | Abort an agent's current run. It stays alive and keeps its context. |
 | `scripts/router.py` | Board-to-RPC router. `spawn.sh` starts it automatically in the `router` window. It pushes board posts into recipients' conversations. |
@@ -37,10 +37,10 @@ $S/spawn.sh a1; $S/spawn.sh a2
 sleep 2                                  # let pi boot (commands sent earlier are still queued and work)
 $S/send.sh a1 "Compute 1+1. Reply with only the number."
 $S/send.sh a2 "Compute 2*2. Reply with only the number."
-$S/wait.sh a1 a2                         # collects answers as each finishes (default 90s)
+$S/next.sh                               # returns at the first event; call again until "--- all idle"
 ```
 
-Then report each subagent's answer to the user.
+React to each event as it arrives (follow up, answer a board question, update the user), then call `next.sh` again. Stop when it says `--- all idle` and every agent has answered, then report to the user.
 
 - **Follow-ups:** `send.sh` again. The agent keeps its context until its window is restarted or killed.
 - **Command responses** (e.g. `get_state`): look for `{"type":"response","id":...}` in `out.jsonl`.
@@ -49,10 +49,10 @@ Then report each subagent's answer to the user.
 
 ## Don't get stuck
 
-- Keep each `wait.sh` short (≤90s, or ≤120s for heavy tasks). On exit 2, run `status.sh`. If an agent is busy doing useful work, wait again. If it's looping or blocked (for example a long `sleep` or a `board.py read` loop), run `abort.sh` and re-prompt it with clearer limits.
-- Never wait on agents one at a time. Pass all names to one `wait.sh` call.
+- Keep each `next.sh` short (≤90s, or ≤120s for heavy tasks). On exit 2, check the status it printed. If an agent is busy doing useful work, wait again. If it's looping or blocked (for example a long `sleep` or a `board.py read` loop), run `abort.sh` and re-prompt it with clearer limits.
+- Never wait on agents one at a time. One `next.sh` watches all of them.
 - With the router running, agents shouldn't wait on the board at all. If you see one looping on `board.py read`, abort it and remind it that replies are pushed.
-- A multi-agent conversation settles and resumes several times as messages bounce back and forth. One `wait.sh` returning doesn't mean the conversation is over. Check `status.sh` (all idle) and `board.py log`.
+- A multi-agent conversation settles and resumes several times as messages bounce back and forth. A settle event doesn't mean the conversation is over. Only `--- all idle` does (check `board.py log` for the whole thread).
 - Report progress to the user between waits rather than going silent.
 
 ## Message board
@@ -69,7 +69,7 @@ If `~/.pi/agent/subagents/README.md` exists, `spawn.sh` appends it to the agent'
 
 So agents never wait or poll. They post and end their turn, and replies wake them up.
 
-- **Host side:** kick things off with `send.sh`. Then use `wait.sh`/`status.sh` as usual: an agent counts as settled when it's idle with nothing queued. Read the conversation with `board.py log`, and check messages addressed to `host` the same way. The `router` window logs every delivery.
+- **Host side:** kick things off with `send.sh`. Then loop on `next.sh`: it delivers both agent answers and board messages addressed to `host` (its cursor is `host.cursor` in the board folder). An agent counts as settled when it's idle with nothing queued. Read the whole conversation with `board.py log`. The `router` window logs every delivery.
 - `send.sh` also queues as a follow-up, so it's safe to send while an agent is busy.
 
 ## Notes

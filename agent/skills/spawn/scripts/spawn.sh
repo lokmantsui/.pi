@@ -17,6 +17,9 @@ fi
 if [ ! -f "$BOARD_DIR/board.py" ]; then
   cp "$TPL/board.py" "$BOARD_DIR/board.py" && chmod +x "$BOARD_DIR/board.py"; echo "installed board.py -> $BOARD_DIR/board.py"
 fi
+# next.sh's board cursor for host: start at the current end so old history isn't replayed
+[ -f "$BOARD_DIR/host.cursor" ] || { tail -n1 "$BOARD_DIR/board.jsonl" 2>/dev/null | jq -r .id; } > "$BOARD_DIR/host.cursor"
+[ -s "$BOARD_DIR/host.cursor" ] || echo 0 > "$BOARD_DIR/host.cursor"
 EXTRA=(); [ -f "$BOARD_README" ] && EXTRA=(--append-system-prompt "$BOARD_README" --append-system-prompt "Your subagent name is $NAME.")
 PIARGS=$(printf '%q ' --mode rpc --no-session "${EXTRA[@]}" "$@")
 CMD="cd $(printf %q "$CWD") && export SUBAGENT_NAME=$(printf %q "$NAME") SUBAGENT_BOARD=$(printf %q "$BOARD_DIR") && tail -n +1 -f $(printf %q "$D/cmd.jsonl") | pi $PIARGS | tee $(printf %q "$D/out.jsonl") | python3 -u $(printf %q "$HERE/view.py"); echo '[subagent exited]'; read"
