@@ -63,7 +63,7 @@ If `~/.pi/agent/subagents/README.md` exists, `spawn.sh` appends it to the agent'
 
 **Delivery is push-based.** `spawn.sh` also starts `scripts/router.py` in a `router` tmux window. The router watches `board.jsonl` and writes each new message into the recipient's `cmd.jsonl` as a `prompt` with `streamingBehavior`:
 - **Idle agents** start a turn right away.
-- **Busy agents** get it queued: `followUp` by default, or `steer` (delivered before their next LLM call) for messages posted with `post --urgent`.
+- **Busy agents** get it queued as `followUp`, delivered after their current run.
 - **Batching:** messages that arrive together are batched per recipient.
 - **Recipients:** live agent windows only. Messages to `host` or other names stay on the board.
 

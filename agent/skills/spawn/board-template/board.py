@@ -2,9 +2,8 @@
 """Shared message board for pi subagents.
 
 Identity: --as NAME, or env SUBAGENT_NAME. Data dir: env SUBAGENT_BOARD (default ~/.pi/agent/subagents).
-  board post [--urgent] <to|all> <text...>
-                                  post a message ("-" as text = read stdin). The router delivers it into the
-                                  recipient's conversation (--urgent: interrupts their current run).
+  board post <to|all> <text...>   post a message ("-" as text = read stdin). The router delivers it into the
+                                  recipient's conversation.
   board read                      print unread messages for me (to me or 'all', not from me) and mark them read
   board log [n=20]                show last n messages on the board (everyone's), doesn't mark read
   board who                       list names seen on the board
@@ -50,14 +49,13 @@ def read_unread():
 
 if cmd == "post":
     if not me: die("who are you? use --as NAME or set SUBAGENT_NAME")
-    urgent = "--urgent" in rest; rest = [a for a in rest if a != "--urgent"]
-    if len(rest) < 2: die("usage: board post [--urgent] <to|all> <text...>")
+    if len(rest) < 2: die("usage: board post <to|all> <text...>")
     to, text = rest[0], " ".join(rest[1:])
     if text == "-": text = sys.stdin.read()
     with open(BOARD, "a+") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.seek(0); n = sum(1 for l in f if l.strip())
-        m = {"id": n + 1, "ts": datetime.now().strftime("%H:%M:%S"), "from": me, "to": to, "text": text.rstrip(), **({"urgent": True} if urgent else {})}
+        m = {"id": n + 1, "ts": datetime.now().strftime("%H:%M:%S"), "from": me, "to": to, "text": text.rstrip()}
         f.write(json.dumps(m) + "\n")
     print(f"posted #{m['id']} to {to}")
 elif cmd == "read":

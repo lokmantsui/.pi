@@ -3,10 +3,9 @@
 
 Watches $SUBAGENT_BOARD/board.jsonl. For each new message, appends to every recipient's
 $SPAWN_DIR/<name>/cmd.jsonl:
-    {"type":"prompt","message":"📨 ...","streamingBehavior":"followUp"|"steer"}
-Idle agents start a turn immediately. Busy agents get it queued (followUp = after the current run,
-steer = before the next LLM call, for messages posted with --urgent). Messages that arrive in the same
-poll are batched per recipient. Recipients are tmux windows in $SPAWN_SESSION that have a spawn dir.
+    {"type":"prompt","message":"📨 ...","streamingBehavior":"followUp"}
+Idle agents start a turn immediately. Busy agents get it queued until their current run ends.
+Messages that arrive in the same poll are batched per recipient. Recipients are tmux windows in $SPAWN_SESSION that have a spawn dir.
 Anything else (e.g. "host") stays on the board only.
 
 Single instance (flock on $SUBAGENT_BOARD/router.lock). Starts from the end of the board on first run.
@@ -56,17 +55,15 @@ while True:
                 log(f"#{m['id']} {m['from']}->{m['to']}: no live recipient (board only)"); continue
             for t in targets: batches.setdefault(t, []).append(m)
         for t, ms in batches.items():
-            urgent = any(m.get("urgent") for m in ms)
             body = "\n\n".join(f"[#{m['id']} from {m['from']} to {m['to']}]\n{m['text']}" for m in ms)
             text = (f"📨 {len(ms)} board message(s):\n\n{body}\n\n"
                     "(Reply with board.py post <name> \"...\" only if a reply is needed. "
                     "Don't wait for answers: end your turn, and replies will be delivered to you.)")
             cmd = {"type": "prompt", "message": text,
-                   "streamingBehavior": "steer" if urgent else "followUp"}
+                   "streamingBehavior": "followUp"}
             with open(os.path.join(SPAWN_DIR, t, "cmd.jsonl"), "a") as f:
                 f.write(json.dumps(cmd) + "\n")
-            log(f"-> {t}: " + ", ".join(f"#{m['id']} from {m['from']}" for m in ms)
-                + (" [steer]" if urgent else ""))
+            log(f"-> {t}: " + ", ".join(f"#{m['id']} from {m['from']}" for m in ms))
         cursor = msgs[-1]["id"]
         open(CURSOR, "w").write(str(cursor))
     time.sleep(0.5)
