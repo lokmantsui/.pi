@@ -1,15 +1,9 @@
 ---
 name: spawn
-description: Spawn pi subagents in tmux windows running in RPC mode, give them tasks over a shared message board, and get their answers pushed back automatically, with a readable live transcript in each tmux pane. Use when asked to spawn/run subagents, delegate tasks to parallel pi agents, or run pi workers in tmux.
+description: Spawn pi subagents in tmux windows running in RPC mode, send them prompts, wait for and collect their answers, with a readable live transcript in each tmux pane. Use when asked to spawn/run subagents, delegate tasks to parallel pi agents, or run pi workers in tmux.
 ---
 
 # Spawn pi subagents in tmux (RPC mode)
-
-The host (you) and all subagents share **one channel: the message board**. Everyone posts to it, and the `board` extension (`~/.pi/agent/extensions/board.ts`, loaded by every pi) pushes each message into its recipient's conversation.
-
-- **Idle recipient:** the message starts a turn.
-- **Busy recipient:** the message is queued as a follow-up. Urgent messages arrive as a steer.
-- **Nobody waits or polls**, the host included.
 
 Each subagent runs in its own tmux window:
 
@@ -17,71 +11,70 @@ Each subagent runs in its own tmux window:
 tail -f cmd.jsonl | pi --mode rpc --no-session | tee out.jsonl | view.py
 ```
 
-The pane shows a readable transcript: incoming board messages, streamed replies, thinking, tool calls and results, errors, and `── idle ──`. `out.jsonl` is the raw RPC event stream, and `cmd.jsonl` takes raw RPC commands (for example `abort`). Per-agent files are in `$SPAWN_DIR/<name>/` (default `/tmp/pi-subagents/<name>/`). The tmux session is `$SPAWN_SESSION` (default `subagents`).
+- **Send:** add one JSON RPC command per line to `cmd.jsonl`.
+- **Receive:** read `out.jsonl` (the raw JSONL event stream). A run is done when an `agent_settled` event appears.
+- **Watch:** the pane shows a readable transcript (user prompt, streamed reply, thinking, tool calls/results, errors, `── idle ──`).
 
-## Scripts
+Per-agent files are in `$SPAWN_DIR/<name>/` (default `/tmp/pi-subagents/<name>/`). The tmux session is `$SPAWN_SESSION` (default `subagents`).
 
-Paths are relative to this skill directory. `B=~/.pi/agent/subagents/board.py`.
+## Scripts (relative to this skill directory)
 
-| Command | Purpose |
+| Script | Purpose |
 |---|---|
-| `scripts/spawn.sh <name> [pi args...]` | Start (or restart) a subagent. Extra args go to pi, e.g. `--model x`, `--tools read,bash`. `SPAWN_CWD` sets its working dir (default: current dir). |
-| `$B post <name\|all> "task"` | Give a task (you are `host`). `--urgent` interrupts the agent's current work. |
-| `$B log [n]` | The whole conversation (everyone's messages). |
+| `scripts/spawn.sh <name> [pi args...]` | Start (or restart) a subagent window. Extra args go to pi, e.g. `--model x`, `--tools read,bash`. `SPAWN_CWD` sets its working dir (default: current dir). |
+| `scripts/send.sh <name> <message>` | Send a prompt. `send.sh <name> --raw '<json>'` sends any RPC command (e.g. `{"type":"abort"}`, `{"type":"get_state","id":"s1"}`). |
+| `scripts/wait.sh [-t 90] <name...>` | Wait for several agents **in parallel**, printing each final answer (or `ERROR(...)`) as soon as it settles. On timeout it prints the stragglers' status and exits 2. The agents keep running. |
 | `scripts/status.sh [name...]` | Non-blocking snapshot: idle/BUSY, seconds since the last event, and the current tool call. |
 | `scripts/abort.sh <name...>` | Abort an agent's current run. It stays alive and keeps its context. |
+| `scripts/router.py` | Board-to-RPC router. `spawn.sh` starts it automatically in the `router` window. It pushes board posts into recipients' conversations. |
 | `scripts/view.py` | Transcript renderer. Can also be used offline: `python3 scripts/view.py < out.jsonl`. |
 
 ## Workflow
 
 ```bash
-S=<skill dir>/scripts; B=~/.pi/agent/subagents/board.py
+S=<skill dir>/scripts
 $S/spawn.sh a1; $S/spawn.sh a2
-$B post a1 "Compute 1+1. Reply with only the number."   # safe right away: messages posted while pi boots are delivered
-$B post a2 "Compute 2*2. Reply with only the number."
+sleep 2                                  # let pi boot (commands sent earlier are still queued and work)
+$S/send.sh a1 "Compute 1+1. Reply with only the number."
+$S/send.sh a2 "Compute 2*2. Reply with only the number."
+$S/wait.sh a1 a2                         # collects answers as each finishes (default 90s)
 ```
 
-Then **end your turn.** Tell the user what's running and that answers will come in. Each agent posts its final answer to `host`, and the answer arrives in your conversation as `📨 board message(s)`. Report each answer to the user as it arrives.
+Then report each subagent's answer to the user.
 
-- **Follow-ups:** post again. An agent keeps its context until its window is restarted or killed.
+- **Follow-ups:** `send.sh` again. The agent keeps its context until its window is restarted or killed.
+- **Command responses** (e.g. `get_state`): look for `{"type":"response","id":...}` in `out.jsonl`.
 - **Tell the user:** `tmux attach -t subagents` to watch (`Ctrl-b n`/`p` to switch windows).
 - **Cleanup:** `tmux kill-window -t subagents:<name>`, or `tmux kill-session -t subagents` for all. Only do this when the user asks or the task is clearly finished.
 
-## How replies work
-
-Every subagent has its own copy of the `board` extension doing this bookkeeping:
-
-- **Every message is explicit and addressed, for everyone.** Agents reply with `board_post` to whoever asked, whether host or agent. Plain text replies go nowhere, so you hear conclusions, not chatter.
-- **Requests vs replies:**
-  - A message from someone the agent is waiting on is their reply.
-  - Any other direct message, and anything from host, is a request: the agent owes the sender a reply.
-  - The agent's own post to someone it owes is its reply. A post to anyone else is a new request, and the agent now waits on them.
-- **Safety net:** an agent might finish (settle) owing replies while not waiting on anyone, apart from agents that are waiting on it. The extension then sends that agent one reminder per request, telling it to reply or say what's blocking it. Nobody else is bothered. No reminder after `abort.sh`.
-- **Polling is blocked:** bash commands that loop, sleep or tail on the board are blocked with a reminder that messages are pushed.
-- **Loop guard:** messages carry a hop count, and a host message resets it. Subagents drop messages beyond `BOARD_MAX_HOPS` (default 30) and post a note to `host`.
-
-**Host side:**
-- The host listens once this session runs `spawn.sh` or `board.py`, or after `/board on`. `/board off` and `/board status` are also available.
-- Only one host session listens. Its pid is in `$SUBAGENT_BOARD/host.owner`, and the latest session to activate wins.
-- Messages already on the board before activation are skipped.
-
 ## Don't get stuck
 
-- **Nothing arrives for a long time:** run `status.sh`. If an agent is busy doing useful work, end your turn again. If it's looping or blocked, run `abort.sh`, which stops the run without killing the agent. Then post the task again with clearer limits.
-- **Multi-agent conversations:** an agent may finish and resume several times as messages bounce back and forth. Use `board.py log` to see the whole conversation.
-- **Keep the user informed:** report progress as messages arrive instead of going silent.
+- Keep each `wait.sh` short (≤90s, or ≤120s for heavy tasks). On exit 2, run `status.sh`. If an agent is busy doing useful work, wait again. If it's looping or blocked (for example a long `sleep` or a `board.py read` loop), run `abort.sh` and re-prompt it with clearer limits.
+- Never wait on agents one at a time. Pass all names to one `wait.sh` call.
+- With the router running, agents shouldn't wait on the board at all. If you see one looping on `board.py read`, abort it and remind it that replies are pushed.
+- A multi-agent conversation settles and resumes several times as messages bounce back and forth. One `wait.sh` returning doesn't mean the conversation is over. Check `status.sh` (all idle) and `board.py log`.
+- Report progress to the user between waits rather than going silent.
 
-## Board files
+## Message board
 
-- **Location:** `$SUBAGENT_BOARD` (default `~/.pi/agent/subagents/`). It holds `board.jsonl` (messages), `board.py`, `README.md`, `hops/` and `host.owner`.
-- **Installed by `spawn.sh`:**
-  - It always syncs `board.py` from this skill's `board-template/`, because `board.py` is code.
-  - It installs `README.md` only if missing, since the user may have edited it.
-  - It never touches `board.jsonl`.
-- **What each subagent gets:** `README.md` is appended to its system prompt, and `spawn.sh` sets `SUBAGENT_NAME` and `SUBAGENT_BOARD_FROM`. `SUBAGENT_BOARD_FROM` is the board position at spawn time, which is where its delivery starts.
+**`spawn.sh` installs the board automatically.** If `README.md` or `board.py` is missing from the board folder, it copies it from this skill's `board-template/`, with the README's paths pointed at the actual board folder. It prints an `installed ...` line when it does. It never overwrites existing files: the user may have edited the README, and `board.jsonl`/`cursors/` hold live messages. Don't restore an old board from the trash; let `spawn.sh` reinstall it.
+
+If `~/.pi/agent/subagents/README.md` exists, `spawn.sh` appends it to the agent's system prompt and sets `SUBAGENT_NAME`. Agents talk with `~/.pi/agent/subagents/board.py post <name|all> "msg"`. Set `SUBAGENT_BOARD` to use a different board folder.
+
+**Delivery is push-based.** `spawn.sh` also starts `scripts/router.py` in a `router` tmux window. The router watches `board.jsonl` and writes each new message into the recipient's `cmd.jsonl` as a `prompt` with `streamingBehavior`:
+- **Idle agents** start a turn right away.
+- **Busy agents** get it queued: `followUp` by default, or `steer` (delivered before their next LLM call) for messages posted with `post --urgent`.
+- **Batching:** messages that arrive together are batched per recipient.
+- **Recipients:** live agent windows only. Messages to `host` or other names stay on the board.
+
+So agents never wait or poll. They post and end their turn, and replies wake them up.
+
+- **Reply-loop guard:** each message carries a hop count, and messages beyond `ROUTER_MAX_HOPS` (default 30) aren't delivered. The router posts a note to `host` instead. `send.sh` resets an agent's hop count.
+- **Host side:** kick things off with `send.sh`. Then use `wait.sh`/`status.sh` as usual: an agent counts as settled when it's idle with nothing queued. Read the conversation with `board.py log`, and check messages addressed to `host` the same way. The `router` window logs every delivery.
+- `send.sh` also queues as a follow-up, so it's safe to send while an agent is busy.
 
 ## Notes
 
-- `tail -n +1` replays `cmd.jsonl` on restart, so `spawn.sh` truncates it.
+- Prompts must be written to `cmd.jsonl` while the agent is running. `tail -n +1` replays the whole file on restart, so `spawn.sh` truncates it.
 - `--no-session` means nothing is persisted. To keep a session that can be resumed interactively, pass `--session-dir <dir>` instead (edit `spawn.sh`).
 - Protocol reference: pi docs `docs/rpc.md`, `docs/rpc-commands.md`, `docs/json.md`.
