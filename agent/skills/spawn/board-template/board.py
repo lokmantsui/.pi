@@ -5,7 +5,7 @@ Identity: --as NAME, or env SUBAGENT_NAME, else "host". Data dir: env SUBAGENT_B
 Delivery is done by the pi `board` extension (~/.pi/agent/extensions/board.ts): messages are pushed into the
 recipient's conversation. Nobody needs to read or poll.
 
-  board post [--urgent] <to|all> <text...>   post a message ("-" as text = read stdin)
+  board post <to|all> <text...>              post a message ("-" as text = read stdin)
   board log [n=20]                           show the last n messages (everyone's)
   board who                                  list names seen on the board
 """
@@ -33,22 +33,16 @@ def load():
         return [json.loads(l) for l in f if l.strip()]
 
 def fmt(m):
-    return f"[#{m['id']} {m['ts']}] {m['from']} -> {m['to']}{', urgent' if m.get('urgent') else ''}:\n{m['text']}\n"
+    return f"[#{m['id']} {m['ts']}] {m['from']} -> {m['to']}:\n{m['text']}\n"
 
 if cmd == "post":
-    urgent = False
-    while rest and rest[0].startswith("--"):
-        o = rest.pop(0)
-        if o == "--urgent": urgent = True
-        else: die(f"unknown option {o}")
-    if len(rest) < 2: die("usage: board post [--urgent] <to|all> <text...>")
+    if len(rest) < 2: die("usage: board post <to|all> <text...>")
     to, text = rest[0], " ".join(rest[1:])
     if text == "-": text = sys.stdin.read()
     with open(BOARD, "a+") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.seek(0); n = sum(1 for l in f if l.strip())
-        m = {"id": n + 1, "ts": datetime.now().strftime("%H:%M:%S"), "from": me, "to": to, "text": text.rstrip(),
-             **({"urgent": True} if urgent else {})}
+        m = {"id": n + 1, "ts": datetime.now().strftime("%H:%M:%S"), "from": me, "to": to, "text": text.rstrip()}
         f.write(json.dumps(m) + "\n")
     print(f"posted #{m['id']} to {to}")
 elif cmd == "log":

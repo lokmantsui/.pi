@@ -3,7 +3,7 @@
  *
  * Every pi process loads this. Identity: $SUBAGENT_NAME (set by the spawn skill), else "host".
  *   - Receive: watches $SUBAGENT_BOARD/board.jsonl and pushes messages addressed to me (subagents: also
- *     "all") into my conversation. Idle -> starts a turn. Busy -> follow-up (steer if urgent).
+ *     "all") into my conversation. Idle -> starts a turn. Busy -> queued until its current run ends.
  *   - Send: every message is explicit and addressed: subagents use the `board_post` tool, the host uses
  *     `board.py post <to> "..."`. All writes go through board.py (it owns locking and ids).
  *   - Requests and replies (subagents), same rule for everyone:
@@ -31,7 +31,7 @@ const POLL_MS = 500;
 const ME = process.env.SUBAGENT_NAME || "host";
 const IS_HOST = ME === "host";
 
-type Msg = { id: number; ts: string; from: string; to: string; text: string; urgent?: boolean };
+type Msg = { id: number; ts: string; from: string; to: string; text: string };
 
 const readText = (p: string) => {
 	try {
@@ -57,9 +57,8 @@ export default function (pi: ExtensionAPI) {
 	const reminded = new Set<number>(); // request ids I was already reminded about
 	let aborted = false; // the last run was aborted (abort.sh): don't restart it with a reminder
 
-	async function post(to: string, text: string, urgent?: boolean) {
+	async function post(to: string, text: string) {
 		const args = [BOARD_PY, "--as", ME, "post"];
-		if (urgent) args.push("--urgent");
 		const r = await pi.exec("python3", [...args, to, text]);
 		if (r.code !== 0) throw new Error(`board.py post failed: ${r.stderr || r.stdout}`);
 		return r.stdout.trim();
@@ -111,7 +110,7 @@ export default function (pi: ExtensionAPI) {
 		if (!deliver.length) return;
 
 		const body = deliver
-			.map((m) => `[#${m.id} from ${m.from}${m.to === "all" ? " to all" : ""}${m.urgent ? ", urgent" : ""}]\n${m.text}`)
+			.map((m) => `[#${m.id} from ${m.from}${m.to === "all" ? " to all" : ""}]\n${m.text}`)
 			.join("\n\n");
 		const askers = [...new Set(deliver.filter((m) => owed.get(m.from) === m.id).map((m) => m.from))];
 		const hint = IS_HOST
@@ -120,7 +119,7 @@ export default function (pi: ExtensionAPI) {
 				"Never wait or poll for replies: end your turn, and replies will wake you.";
 		pi.sendMessage(
 			{ customType: "board", content: `📨 ${deliver.length} board message(s):\n\n${body}\n\n(${hint})`, display: true },
-			{ triggerTurn: true, deliverAs: deliver.some((m) => m.urgent) ? "steer" : "followUp" },
+			{ triggerTurn: true, deliverAs: "followUp" },
 		);
 	}
 
@@ -179,11 +178,10 @@ export default function (pi: ExtensionAPI) {
 			parameters: Type.Object({
 				to: Type.String({ description: 'Recipient: agent name, "all", or "host"' }),
 				text: Type.String({ description: "Self-contained message" }),
-				urgent: Type.Optional(Type.Boolean({ description: "Interrupt the recipient's current work (rarely needed)" })),
 			}),
 			async execute(_id, p) {
 				const isReply = owed.has(p.to); // before posting: poll() updates owed once it sees the post
-				const out = await post(p.to, p.text, p.urgent);
+				const out = await post(p.to, p.text);
 				return {
 					content: [{ type: "text", text: isReply || p.to === "host" || p.to === "all" ? out : `${out}. Their reply will be pushed to you; don't wait for it.` }],
 					details: undefined,

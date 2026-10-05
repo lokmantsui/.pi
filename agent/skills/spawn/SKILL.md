@@ -8,7 +8,7 @@ description: Spawn pi subagents in tmux windows running in RPC mode, give them t
 The host (you) and all subagents share **one channel: the message board**. Everyone posts to it, and the `board` extension (`~/.pi/agent/extensions/board.ts`, loaded by every pi) pushes each message into its recipient's conversation.
 
 - **Idle recipient:** the message starts a turn.
-- **Busy recipient:** the message is queued as a follow-up. Urgent messages arrive as a steer.
+- **Busy recipient:** the message is queued until its current run ends. To interrupt an agent, run `abort.sh` and then post.
 - **Nobody waits or polls**, the host included.
 
 Each subagent runs in its own tmux window:
@@ -26,7 +26,7 @@ Paths are relative to this skill directory. `B=~/.pi/agent/subagents/board.py`.
 | Command | Purpose |
 |---|---|
 | `scripts/spawn.sh <name> [pi args...]` | Start (or restart) a subagent. Extra args go to pi, e.g. `--model x`, `--tools read,bash`. `SPAWN_CWD` sets its working dir (default: current dir). |
-| `$B post <name\|all> "task"` | Give a task (you are `host`). `--urgent` interrupts the agent's current work. |
+| `$B post <name\|all> "task"` | Give a task (you are `host`). |
 | `$B log [n]` | The whole conversation (everyone's messages). |
 | `scripts/status.sh [name...]` | Non-blocking snapshot: idle/BUSY, seconds since the last event, and the current tool call. |
 | `scripts/abort.sh <name...>` | Abort an agent's current run. It stays alive and keeps its context. |
