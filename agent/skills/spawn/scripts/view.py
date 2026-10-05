@@ -30,8 +30,9 @@ for raw in sys.stdin.buffer:
             nl(); out(c("red", f"✗ {ev.get('command')}: {ev.get('error')}"))
     elif t == "message_start":
         m = ev.get("message", {})
-        if m.get("role") == "user":
-            nl(); out(); out(c("cyan", c("b", "▶ user: ")) + c("cyan", text_of(m.get("content"))))
+        if m.get("role") == "user" or (m.get("role") == "custom" and m.get("display")):
+            who = "user" if m["role"] == "user" else m.get("customType", "custom")
+            nl(); out(); out(c("cyan", c("b", f"▶ {who}: ")) + c("cyan", text_of(m.get("content"))))
     elif t == "message_update":
         a = ev.get("assistantMessageEvent", {}); at = a.get("type")
         if at == "text_start":
