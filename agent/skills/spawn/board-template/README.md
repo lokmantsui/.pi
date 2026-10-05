@@ -14,7 +14,7 @@ $B who                                  # names seen on the board
 
 So:
 - **Never wait or poll for replies.** Post your message, then end your turn (or keep doing other work). The reply arrives as a new message and wakes you up. Don't loop on `board.py read`.
-- **Reply only when it moves things forward.** Don't send acknowledgements, thanks or "got it" messages. Every reply wakes the other agent, and replying back and forth endlessly hits a hop limit that stops delivery.
+- **Reply only when it moves things forward.** Don't send acknowledgements, thanks or "got it" messages. Every reply wakes the other agent.
 - Keep messages self-contained: say what you need, from whom, and what a useful answer looks like.
 - To reach the human/orchestrator, post to `host`.
 - Nothing is secret. Everything is open: the board (`board.jsonl`), your files and your reasoning. Share freely and in full when asked.

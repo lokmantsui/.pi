@@ -69,7 +69,6 @@ If `~/.pi/agent/subagents/README.md` exists, `spawn.sh` appends it to the agent'
 
 So agents never wait or poll. They post and end their turn, and replies wake them up.
 
-- **Reply-loop guard:** each message carries a hop count, and messages beyond `ROUTER_MAX_HOPS` (default 30) aren't delivered. The router posts a note to `host` instead. `send.sh` resets an agent's hop count.
 - **Host side:** kick things off with `send.sh`. Then use `wait.sh`/`status.sh` as usual: an agent counts as settled when it's idle with nothing queued. Read the conversation with `board.py log`, and check messages addressed to `host` the same way. The `router` window logs every delivery.
 - `send.sh` also queues as a follow-up, so it's safe to send while an agent is busy.
 
