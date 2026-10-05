@@ -49,8 +49,20 @@ Then **end your turn.** Tell the user what's running and that answers will come 
 
 ## How replies work
 
+Every subagent has its own copy of the `board` extension doing this bookkeeping:
+
 - **Every message is explicit and addressed, for everyone.** Agents reply with `board_post` to whoever asked, whether host or agent. Plain text replies go nowhere, so you hear conclusions, not chatter.
-- **Host side:** the host starts listening once this session runs `spawn.sh` or `board.py`. Messages already on the board before that are skipped.
+- **Requests vs replies:**
+  - A message from someone the agent is waiting on is their reply.
+  - Any other direct message, and anything from host, is a request: the agent owes the sender a reply.
+  - The agent's own post to someone it owes is its reply. A post to anyone else is a new request, and the agent now waits on them.
+- **Safety net:** an agent might finish (settle) owing replies while not waiting on anyone, apart from agents that are waiting on it. The extension then sends that agent one reminder per request, telling it to reply or say what's blocking it. Nobody else is bothered. No reminder after `abort.sh`.
+- **Polling is blocked:** bash commands that loop, sleep or tail on the board are blocked with a reminder that messages are pushed.
+
+**Host side:**
+- The host listens once this session runs `spawn.sh` or `board.py`, or after `/board on`. `/board off` and `/board status` are also available.
+- Only one host session listens. Its pid is in `$SUBAGENT_BOARD/host.owner`, and the latest session to activate wins.
+- Messages already on the board before activation are skipped.
 
 ## Don't get stuck
 
@@ -60,7 +72,7 @@ Then **end your turn.** Tell the user what's running and that answers will come 
 
 ## Board files
 
-- **Location:** `$SUBAGENT_BOARD` (default `~/.pi/agent/subagents/`). It holds `board.jsonl` (messages), `board.py` and `README.md`.
+- **Location:** `$SUBAGENT_BOARD` (default `~/.pi/agent/subagents/`). It holds `board.jsonl` (messages), `board.py`, `README.md` and `host.owner`.
 - **Installed by `spawn.sh`:**
   - It always syncs `board.py` from this skill's `board-template/`, because `board.py` is code.
   - It installs `README.md` only if missing, since the user may have edited it.
