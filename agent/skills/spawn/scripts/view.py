@@ -58,5 +58,7 @@ for raw in sys.stdin.buffer:
             nl(); out(c("red", f"✗ {m.get('stopReason')}: {m.get('errorMessage', '')}"))
     elif t == "auto_retry_start" or t == "compaction_start":
         nl(); out(c("mag", f"… {t}"))
+    elif t == "extension_ui_request" and str(ev.get("title", "")).startswith("🔐"):
+        nl(); out(c("yellow", c("b", "⏸ " + ev["title"])) + c("dim", f"  [id {ev['id']}] waiting for the user…"))
     elif t == "agent_settled":
         nl(); out(c("mag", "── idle ──"))

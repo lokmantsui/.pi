@@ -26,6 +26,8 @@ Per-agent files are in `$SPAWN_DIR/<name>/` (default `/tmp/pi-subagents/<name>/`
 | `scripts/wait.sh [-t 90] <name...>` | Wait for several agents **in parallel**, printing each final answer (or `ERROR(...)`) as soon as it settles. On timeout it prints the stragglers' status and exits 2. The agents keep running. |
 | `scripts/status.sh [name...]` | Non-blocking snapshot: idle/BUSY, seconds since the last event, and the current tool call. |
 | `scripts/abort.sh <name...>` | Abort an agent's current run. It stays alive and keeps its context. |
+| `scripts/permit.sh` | No args: list pending permission requests. `permit.sh <name> allow [id]` / `permit.sh <name> deny [id] ["reason"]` answers them (default: all of that agent's pending requests). |
+| `scripts/pending.py [--json] [name...]` | Used by `permit.sh`/`wait.sh`/`status.sh`: prints unanswered permission requests. |
 | `scripts/router.py` | Board-to-RPC router. `spawn.sh` starts it automatically in the `router` window. It pushes board posts into recipients' conversations. |
 | `scripts/view.py` | Transcript renderer. Can also be used offline: `python3 scripts/view.py < out.jsonl`. |
 
@@ -47,8 +49,19 @@ Then report each subagent's answer to the user.
 - **Tell the user:** `tmux attach -t subagents` to watch (`Ctrl-b n`/`p` to switch windows).
 - **Cleanup:** `tmux kill-window -t subagents:<name>`, or `tmux kill-session -t subagents` for all. Only do this when the user asks or the task is clearly finished.
 
+## Permissions (the user decides)
+
+Every subagent loads `extensions/permission-gate.ts`. Reading is free: `read`/`grep`/`find`/`ls`, plus bash commands where every segment is a known read-only command (`cat`, `rg`, `git status/log/diff`, `board.py post/log`, ...). **Anything else pauses** before running: writes/edits, other bash commands, other tools. While paused the agent asks for permission with an `extension_ui_request` in `out.jsonl`, shown as `⏸ 🔐 Permission request ...` in its pane.
+
+- `wait.sh` exits **3** as soon as an agent it's waiting on is blocked, and prints `<name> <id> <request>`. `status.sh` shows `⏸ WAITING FOR PERMISSION`.
+- **Only the human user can grant permission.** Show them the exact request (agent, command/path) and ask them, using a structured question if available. Then run `permit.sh <name> allow|deny [id] ["reason"]` with *their* answer, and `wait.sh` again. Never allow or deny on your own, even if the action looks harmless or the user approved something similar earlier, unless the user explicitly gave you a standing rule (for example "allow all writes under /tmp/foo"). Then say which rule you applied.
+- When several requests are pending, show them all in one question.
+- A deny reason is passed to the agent ("The user denied permission for this action: <reason>"), so tell it what to do instead.
+- An aborted run drops its pending requests.
+
 ## Don't get stuck
 
+- `wait.sh` exit 3 means a permission request: ask the user (see above). Don't treat it as a timeout.
 - Keep each `wait.sh` short (≤90s, or ≤120s for heavy tasks). On exit 2, run `status.sh`. If an agent is busy doing useful work, wait again. If it's looping or blocked (for example a long `sleep` or a `board.py read` loop), run `abort.sh` and re-prompt it with clearer limits.
 - Never wait on agents one at a time. Pass all names to one `wait.sh` call.
 - With the router running, agents shouldn't wait on the board at all. If you see one looping on `board.py read`, abort it and remind it that replies are pushed.
