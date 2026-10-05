@@ -2,7 +2,6 @@
 # Usage: status.sh [name...]   -> non-blocking snapshot: idle/busy, how long, what it's doing now
 ROOT=${SPAWN_DIR:-/tmp/pi-subagents}
 names=("$@"); [ ${#names[@]} -eq 0 ] && names=($(ls "$ROOT" 2>/dev/null))
-HERE=$(cd "$(dirname "$0")" && pwd)
 for n in "${names[@]}"; do
   f=$ROOT/$n/out.jsonl; [ -f "$f" ] || continue
   age=$(( $(date +%s) - $(stat -c %Y "$f") ))
@@ -13,5 +12,4 @@ for n in "${names[@]}"; do
       + " (last event \($age)s ago)"
       + (if $s=="agent_start" and $l.type=="tool_execution_start" then " — running \($l.toolName): \($l.args|tostring|.[0:120])"
          elif $s=="agent_start" and $l.type=="message_update" then " — writing reply" else "" end)' "$f"
-  "$HERE/pending.py" "$n" | sed 's/^/  ⏸ WAITING FOR PERMISSION: /'
 done

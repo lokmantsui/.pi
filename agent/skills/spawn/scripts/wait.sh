@@ -2,8 +2,6 @@
 # Usage: wait.sh [-t timeout_s=90] <name...>
 # Waits for all named agents in parallel; prints each final answer as soon as it settles.
 # On timeout, prints status of the stragglers (doesn't kill them) and exits 2 — call again or abort them.
-# If an agent is blocked on a permission request, prints the request(s) and exits 3 right away:
-# ask the user, answer with permit.sh, then wait again.
 T=90; [ "${1:-}" = "-t" ] && { T=$2; shift 2; }
 [ $# -gt 0 ] || { echo "usage: wait.sh [-t s] <name...>" >&2; exit 1; }
 ROOT=${SPAWN_DIR:-/tmp/pi-subagents}; HERE=$(cd "$(dirname "$0")" && pwd)
@@ -19,12 +17,7 @@ for ((i=0; i<T && ${#pending[@]}; i++)); do
       if [ $# -gt 1 ]; then echo "=== $n:"; answer "$n"; echo; else answer "$n"; fi
     else left+=("$n"); fi
   done
-  pending=("${left[@]}")
-  if [ ${#pending[@]} -gt 0 ]; then
-    perms=$("$HERE/pending.py" "${pending[@]}")
-    if [ -n "$perms" ]; then echo "--- PERMISSION NEEDED (ask the user, then permit.sh <name> allow|deny [id] [reason]):"; echo "$perms"; exit 3; fi
-    sleep 1
-  fi
+  pending=("${left[@]}"); [ ${#pending[@]} -gt 0 ] && sleep 1
 done
 [ ${#pending[@]} -eq 0 ] && exit 0
 echo "--- still running after ${T}s:" >&2; "$HERE/status.sh" "${pending[@]}" >&2; exit 2
