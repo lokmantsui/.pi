@@ -18,9 +18,6 @@ if [ ! -f "$BOARD_DIR/board.py" ]; then
   cp "$TPL/board.py" "$BOARD_DIR/board.py" && chmod +x "$BOARD_DIR/board.py"; echo "installed board.py -> $BOARD_DIR/board.py"
 fi
 EXTRA=(); [ -f "$BOARD_README" ] && EXTRA=(--append-system-prompt "$BOARD_README" --append-system-prompt "Your subagent name is $NAME.")
-# permission gate: anything beyond reading needs the user's approval (see permit.sh)
-PERMS="Permissions: you may read files and inspect state freely. Any other action (editing/writing files, non-read-only bash commands, other tools) is gated: the call pauses until the user approves or denies it. Just make the call; don't ask for permission in prose. If a call is denied, don't retry it as-is: adjust your approach, or explain what you need and why."
-EXTRA+=(-e "$HERE/../extensions/permission-gate.ts" --append-system-prompt "$PERMS")
 PIARGS=$(printf '%q ' --mode rpc --no-session "${EXTRA[@]}" "$@")
 CMD="cd $(printf %q "$CWD") && export SUBAGENT_NAME=$(printf %q "$NAME") SUBAGENT_BOARD=$(printf %q "$BOARD_DIR") && tail -n +1 -f $(printf %q "$D/cmd.jsonl") | pi $PIARGS | tee $(printf %q "$D/out.jsonl") | python3 -u $(printf %q "$HERE/view.py"); echo '[subagent exited]'; read"
 # the board router (pushes board posts into agents' conversations) always lives in the FIRST window
