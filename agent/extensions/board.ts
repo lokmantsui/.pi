@@ -12,8 +12,6 @@
  *       anyone else is a request, and I'm waiting on them.
  *   - Safety net: if I settle owing replies and I'm not waiting on anyone (except those who wait on me),
  *     I get one reminder per request. Nobody else is bothered.
- *   - Loop guard: each message carries a hop count (1 + the highest hop count I received since the last
- *     host message). Subagents drop messages over $BOARD_MAX_HOPS (default 30) and tell host.
  *
  * The host side is off until the session runs spawn.sh / board.py (or /board on), so ordinary pi sessions
  * don't consume board messages. Only one host session listens: $SUBAGENT_BOARD/host.owner holds its pid,
@@ -29,12 +27,11 @@ const BOARD_DIR = (process.env.SUBAGENT_BOARD || join(homedir(), ".pi", "agent",
 const BOARD = join(BOARD_DIR, "board.jsonl");
 const BOARD_PY = join(BOARD_DIR, "board.py");
 const OWNER = join(BOARD_DIR, "host.owner");
-const MAX_HOPS = Number(process.env.BOARD_MAX_HOPS || 30);
 const POLL_MS = 500;
 const ME = process.env.SUBAGENT_NAME || "host";
 const IS_HOST = ME === "host";
 
-type Msg = { id: number; ts: string; from: string; to: string; text: string; urgent?: boolean; hops?: number };
+type Msg = { id: number; ts: string; from: string; to: string; text: string; urgent?: boolean };
 
 const readText = (p: string) => {
 	try {
@@ -55,14 +52,13 @@ const loadBoard = (): Msg[] =>
 export default function (pi: ExtensionAPI) {
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let cursor = 0;
-	let hops = 0; // highest hop count received since the last host message
 	const owed = new Map<string, number>(); // sender -> id of their request I haven't replied to
 	const waiting = new Set<string>(); // agents I asked something and haven't heard back from
 	const reminded = new Set<number>(); // request ids I was already reminded about
 	let aborted = false; // the last run was aborted (abort.sh): don't restart it with a reminder
 
 	async function post(to: string, text: string, urgent?: boolean) {
-		const args = [BOARD_PY, "--as", ME, "post", "--hops", String(hops + 1)];
+		const args = [BOARD_PY, "--as", ME, "post"];
 		if (urgent) args.push("--urgent");
 		const r = await pi.exec("python3", [...args, to, text]);
 		if (r.code !== 0) throw new Error(`board.py post failed: ${r.stderr || r.stdout}`);
@@ -93,7 +89,6 @@ export default function (pi: ExtensionAPI) {
 			else if (m.to !== "host") waiting.add(m.to);
 			return;
 		}
-		hops = m.from === "host" ? 0 : Math.max(hops, m.hops ?? 0);
 		if (waiting.has(m.from)) waiting.delete(m.from); // their reply
 		else if (m.from === "host" || m.to === ME) owed.set(m.from, m.id); // a request
 	}
@@ -110,18 +105,9 @@ export default function (pi: ExtensionAPI) {
 				continue;
 			}
 			if (m.from === ME || !(m.to === ME || (!IS_HOST && m.to === "all"))) continue;
-			if (!IS_HOST && m.from !== "host" && (m.hops ?? 0) > MAX_HOPS) {
-				post("host", `Hop limit ${MAX_HOPS}: dropped #${m.id} from ${m.from} to ${ME}. Agents may be in a reply loop.`).catch(() => {});
-				continue;
-			}
 			if (!IS_HOST) track(m);
 			deliver.push(m);
 		}
-		if (!IS_HOST)
-			try {
-				fs.mkdirSync(join(BOARD_DIR, "hops"), { recursive: true });
-				fs.writeFileSync(join(BOARD_DIR, "hops", ME), String(hops)); // for posts made with board.py by hand
-			} catch {}
 		if (!deliver.length) return;
 
 		const body = deliver
