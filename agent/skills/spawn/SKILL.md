@@ -58,6 +58,7 @@ Every subagent has its own copy of the `board` extension doing this bookkeeping:
   - The agent's own post to someone it owes is its reply. A post to anyone else is a new request, and the agent now waits on them.
 - **Safety net:** an agent might finish (settle) owing replies while not waiting on anyone, apart from agents that are waiting on it. The extension then sends that agent one reminder per request, telling it to reply or say what's blocking it. Nobody else is bothered. No reminder after `abort.sh`.
 - **Polling is blocked:** bash commands that loop, sleep or tail on the board are blocked with a reminder that messages are pushed.
+- **Loop guard:** messages carry a hop count, and a host message resets it. Subagents drop messages beyond `BOARD_MAX_HOPS` (default 30) and post a note to `host`.
 
 **Host side:**
 - The host listens once this session runs `spawn.sh` or `board.py`, or after `/board on`. `/board off` and `/board status` are also available.
@@ -72,7 +73,7 @@ Every subagent has its own copy of the `board` extension doing this bookkeeping:
 
 ## Board files
 
-- **Location:** `$SUBAGENT_BOARD` (default `~/.pi/agent/subagents/`). It holds `board.jsonl` (messages), `board.py`, `README.md` and `host.owner`.
+- **Location:** `$SUBAGENT_BOARD` (default `~/.pi/agent/subagents/`). It holds `board.jsonl` (messages), `board.py`, `README.md`, `hops/` and `host.owner`.
 - **Installed by `spawn.sh`:**
   - It always syncs `board.py` from this skill's `board-template/`, because `board.py` is code.
   - It installs `README.md` only if missing, since the user may have edited it.

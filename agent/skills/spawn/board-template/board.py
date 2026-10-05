@@ -16,7 +16,7 @@ from datetime import datetime
 # so running the skill's template copy doesn't write messages into the skill dir).
 ROOT = os.path.expanduser(os.environ.get("SUBAGENT_BOARD") or "~/.pi/agent/subagents")
 BOARD = os.path.join(ROOT, "board.jsonl")
-os.makedirs(ROOT, exist_ok=True)
+os.makedirs(os.path.join(ROOT, "hops"), exist_ok=True)
 open(BOARD, "a").close()
 
 def die(msg): print(msg, file=sys.stderr); sys.exit(1)
@@ -36,18 +36,22 @@ def fmt(m):
     return f"[#{m['id']} {m['ts']}] {m['from']} -> {m['to']}{', urgent' if m.get('urgent') else ''}:\n{m['text']}\n"
 
 if cmd == "post":
-    urgent = False
+    urgent = False; hops = None
     while rest and rest[0].startswith("--"):
         o = rest.pop(0)
         if o == "--urgent": urgent = True
+        elif o == "--hops": hops = int(rest.pop(0))          # set by the extension
         else: die(f"unknown option {o}")
     if len(rest) < 2: die("usage: board post [--urgent] <to|all> <text...>")
     to, text = rest[0], " ".join(rest[1:])
     if text == "-": text = sys.stdin.read()
+    if hops is None:  # posted by hand: continue the sender's hop count (kept by the extension)
+        try: hops = 0 if me == "host" else int(open(os.path.join(ROOT, "hops", me)).read()) + 1
+        except Exception: hops = 1
     with open(BOARD, "a+") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         f.seek(0); n = sum(1 for l in f if l.strip())
-        m = {"id": n + 1, "ts": datetime.now().strftime("%H:%M:%S"), "from": me, "to": to, "text": text.rstrip(),
+        m = {"id": n + 1, "ts": datetime.now().strftime("%H:%M:%S"), "from": me, "to": to, "text": text.rstrip(), "hops": hops,
              **({"urgent": True} if urgent else {})}
         f.write(json.dumps(m) + "\n")
     print(f"posted #{m['id']} to {to}")

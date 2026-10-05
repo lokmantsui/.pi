@@ -18,7 +18,7 @@ fi
 if ! cmp -s "$TPL/board.py" "$BOARD_DIR/board.py"; then
   cp "$TPL/board.py" "$BOARD_DIR/board.py" && chmod +x "$BOARD_DIR/board.py"; echo "installed board.py -> $BOARD_DIR/board.py"
 fi
-touch "$BOARD_DIR/board.jsonl"
+touch "$BOARD_DIR/board.jsonl"; mkdir -p "$BOARD_DIR/hops"; echo 0 > "$BOARD_DIR/hops/$NAME"
 FROM=$(grep -c . "$BOARD_DIR/board.jsonl" || true)   # deliver board messages posted from now on (ids = line numbers)
 EXTRA=(); [ -f "$BOARD_README" ] && EXTRA=(--append-system-prompt "$BOARD_README" --append-system-prompt "Your subagent name is $NAME.")
 PIARGS=$(printf '%q ' --mode rpc --no-session "${EXTRA[@]}" "$@")
