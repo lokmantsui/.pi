@@ -21,7 +21,7 @@ Per-agent files are in `$SPAWN_DIR/<name>/` (default `/tmp/pi-subagents/<name>/`
 
 | Script | Purpose |
 |---|---|
-| `scripts/spawn.sh <name> [pi args...]` | Start (or restart) a subagent window. Extra args go to pi, e.g. `--model x`, `--tools read,bash`. `SPAWN_CWD` sets its working dir (default: current dir). `SPAWN_TASK` is an optional one-line task description for the roster. |
+| `scripts/spawn.sh <name> [pi args...]` | Start (or restart) a subagent window. Extra args go to pi, e.g. `--tools read,bash`. Subagents run the cheaper `openai/gpt-6.1-sol` by default. Override with `SPAWN_MODEL=...` or `--model x`, but only when the task needs a stronger model. `SPAWN_CWD` sets its working dir (default: current dir). `SPAWN_TASK` is an optional one-line task description for the roster. |
 | `scripts/send.sh <name> <message>` | Send a prompt. `send.sh <name> --raw '<json>'` sends any RPC command (e.g. `{"type":"abort"}`, `{"type":"get_state","id":"s1"}`). |
 | `scripts/next.sh [-t 90] [name...]` | Host event loop. Blocks until the **next** event (an agent settled, printing its final answer or `ERROR(...)`, or a board message to `host`/`all`), prints every event pending at that moment, and exits 0. Each event is shown once. Adds `--- all idle` when no watched agent is busy. Defaults to every spawned agent. On timeout it prints status and exits 2. The agents keep running. |
 | `scripts/status.sh [name...]` | Non-blocking snapshot: idle/BUSY, seconds since the last event, and the current tool call. |

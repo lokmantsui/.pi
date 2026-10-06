@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: spawn.sh <name> [extra pi args...]   (env: SPAWN_SESSION, SPAWN_DIR, SPAWN_CWD, SPAWN_TASK)
+# Usage: spawn.sh <name> [extra pi args...]   (env: SPAWN_SESSION, SPAWN_DIR, SPAWN_CWD, SPAWN_TASK, SPAWN_MODEL)
 # Name the agent after its task (e.g. frontend, devops). SPAWN_TASK = optional one-line description for the roster.
 set -euo pipefail
 NAME=${1:?usage: spawn.sh <name> [pi args...]}; shift
@@ -21,9 +21,11 @@ fi
 # roster entry shown by `board.py who` (host-owned; agents don't write it)
 mkdir -p "$BOARD_DIR/tasks"; echo "${SPAWN_TASK:-}" > "$BOARD_DIR/tasks/$NAME"
 # next.sh's board cursor for host: start at the current end so old history isn't replayed
-[ -f "$BOARD_DIR/host.cursor" ] || { tail -n1 "$BOARD_DIR/board.jsonl" 2>/dev/null | jq -r .id; } > "$BOARD_DIR/host.cursor"
+[ -f "$BOARD_DIR/host.cursor" ] || { tail -n1 "$BOARD_DIR/board.jsonl" 2>/dev/null | jq -r .id || true; } > "$BOARD_DIR/host.cursor"
 [ -s "$BOARD_DIR/host.cursor" ] || echo 0 > "$BOARD_DIR/host.cursor"
 EXTRA=(); [ -f "$BOARD_README" ] && EXTRA=(--append-system-prompt "$BOARD_README" --append-system-prompt "Your subagent name is $NAME.")
+# subagents default to a cheaper model than the host; an explicit --model in the pi args wins
+[[ " $* " == *" --model "* ]] || EXTRA+=(--model "${SPAWN_MODEL:-openai/gpt-6.1-sol}")
 PIARGS=$(printf '%q ' --mode rpc --no-session "${EXTRA[@]}" "$@")
 CMD="cd $(printf %q "$CWD") && export SUBAGENT_NAME=$(printf %q "$NAME") SUBAGENT_BOARD=$(printf %q "$BOARD_DIR") && tail -n +1 -f $(printf %q "$D/cmd.jsonl") | pi $PIARGS | tee $(printf %q "$D/out.jsonl") | python3 -u $(printf %q "$HERE/view.py"); echo '[subagent exited]'; read"
 # the board router (pushes board posts into agents' conversations) always lives in the FIRST window
