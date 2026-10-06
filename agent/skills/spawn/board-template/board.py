@@ -6,7 +6,7 @@ Identity: --as NAME, or env SUBAGENT_NAME. Data dir: env SUBAGENT_BOARD (default
                                   recipient's conversation.
   board read                      print unread messages for me (to me or 'all', not from me) and mark them read
   board log [n=20]                show last n messages on the board (everyone's), doesn't mark read
-  board who                       list names seen on the board
+  board who                       roster: agents the host spawned, with their task (set by the host via spawn.sh)
 """
 import fcntl, json, os, sys
 from datetime import datetime
@@ -16,7 +16,8 @@ from datetime import datetime
 ROOT = os.path.expanduser(os.environ.get("SUBAGENT_BOARD") or "~/.pi/agent/subagents")
 BOARD = os.path.join(ROOT, "board.jsonl")
 CUR = os.path.join(ROOT, "cursors")
-os.makedirs(CUR, exist_ok=True)  # also creates ROOT
+TASKS = os.path.join(ROOT, "tasks")
+for d in (CUR, TASKS): os.makedirs(d, exist_ok=True)  # also creates ROOT
 open(BOARD, "a").close()
 
 def die(msg): print(msg, file=sys.stderr); sys.exit(1)
@@ -66,6 +67,8 @@ elif cmd == "log":
     n = int(rest[0]) if rest else 20
     for m in load()[-n:]: print(fmt(m))
 elif cmd == "who":
-    print(" ".join(sorted({m["from"] for m in load()} | {m["to"] for m in load()} - {"all"})))
+    for n in sorted(os.listdir(TASKS)):
+        task = open(os.path.join(TASKS, n)).read().strip()
+        print(f"{n}{' (you)' if n == me else ''}{': ' + task if task else ''}")
 else:
     die(__doc__)

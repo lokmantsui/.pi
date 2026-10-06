@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Usage: spawn.sh <name> [extra pi args...]   (env: SPAWN_SESSION, SPAWN_DIR, SPAWN_CWD)
+# Usage: spawn.sh <name> [extra pi args...]   (env: SPAWN_SESSION, SPAWN_DIR, SPAWN_CWD, SPAWN_TASK)
+# Name the agent after its task (e.g. frontend, devops). SPAWN_TASK = optional one-line description for the roster.
 set -euo pipefail
 NAME=${1:?usage: spawn.sh <name> [pi args...]}; shift
 SESSION=${SPAWN_SESSION:-subagents}
@@ -17,6 +18,8 @@ fi
 if [ ! -f "$BOARD_DIR/board.py" ]; then
   cp "$TPL/board.py" "$BOARD_DIR/board.py" && chmod +x "$BOARD_DIR/board.py"; echo "installed board.py -> $BOARD_DIR/board.py"
 fi
+# roster entry shown by `board.py who` (host-owned; agents don't write it)
+mkdir -p "$BOARD_DIR/tasks"; echo "${SPAWN_TASK:-}" > "$BOARD_DIR/tasks/$NAME"
 # next.sh's board cursor for host: start at the current end so old history isn't replayed
 [ -f "$BOARD_DIR/host.cursor" ] || { tail -n1 "$BOARD_DIR/board.jsonl" 2>/dev/null | jq -r .id; } > "$BOARD_DIR/host.cursor"
 [ -s "$BOARD_DIR/host.cursor" ] || echo 0 > "$BOARD_DIR/host.cursor"
